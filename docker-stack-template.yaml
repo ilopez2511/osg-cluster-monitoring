@@ -14,23 +14,21 @@ services:
         constraints:
           - node.hostname != ${HOST}
     entrypoint: bash /root/entrypoint.sh
-  agg:
-    image: ashkanarabim/ldms-agg-custom:latest
-    environment:
-      - LDMSD_FLAGS=-x sock:20001 -c /root/agg.conf
-      - COMPID=2
-      - COMPUTE_NODES=${COMPUTE_NODES}
-    depends_on:
-      - samp
-    ports:
-      - target: 20001
-        published: 20001
-        mode: host
-    volumes:
-      - ./storage:/root/storage:rw
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.hostname == ${HOST}
-    entrypoint: bash /root/entrypoint.sh
+  aagg:
+  image: ashkanarabim/ldms-agg-custom:latest
+  environment:
+    - LDMSD_FLAGS=-x sock:20001 -c /root/agg.conf
+    - COMPID=2
+    - COMPUTE_NODES=${COMPUTE_NODES}
+  depends_on:
+    - samp
+  ports:
+    - target: 20001
+      published: 20001
+      mode: host
+  deploy:
+    mode: global
+    placement:
+      constraints:
+        - node.hostname == ${HOST}
+  entrypoint: bash /root/entrypoint.sh
