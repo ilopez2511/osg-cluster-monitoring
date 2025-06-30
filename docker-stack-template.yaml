@@ -14,21 +14,38 @@ services:
         constraints:
           - node.hostname != ${HOST}
     entrypoint: bash /root/entrypoint.sh
-  aagg:
-  image: ashkanarabim/ldms-agg-custom:latest
-  environment:
-    - LDMSD_FLAGS=-x sock:20001 -c /root/agg.conf
-    - COMPID=2
-    - COMPUTE_NODES=${COMPUTE_NODES}
-  depends_on:
-    - samp
-  ports:
-    - target: 20001
-      published: 20001
-      mode: host
-  deploy:
-    mode: global
-    placement:
-      constraints:
-        - node.hostname == ${HOST}
-  entrypoint: bash /root/entrypoint.sh
+
+  agg:
+    image: ashkanarabim/ldms-agg-custom:latest
+    environment:
+      - LDMSD_FLAGS=-x sock:20001 -c /root/agg.conf
+      - COMPID=2
+      - COMPUTE_NODES=${COMPUTE_NODES}
+    depends_on:
+      - samp
+    ports:
+      - target: 20001
+        published: 20001
+        mode: host
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.hostname == ${HOST}
+    entrypoint: bash /root/entrypoint.sh
+
+  receiver:
+    image: python:3.9-slim
+    volumes:
+      - ./receiver:/app
+    working_dir: /app
+    command: ["python", "csv_receiver.py"]
+    ports:
+      - target: 9999
+        published: 9999
+        mode: host 
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.hostname == ${HOST}
