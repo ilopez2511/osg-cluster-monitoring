@@ -12,7 +12,7 @@ services:
       mode: global
       placement:
         constraints:
-          - node.hostname != ${HOST}
+          - node.labels.worker == sampler
     entrypoint: bash /root/entrypoint.sh
 
   agg:
@@ -31,7 +31,7 @@ services:
       mode: global
       placement:
         constraints:
-          - node.hostname == ${HOST}
+          - node.labels.role == aggregator
     entrypoint: bash /root/entrypoint.sh
 
   receiver:
@@ -48,4 +48,4 @@ services:
       mode: global
       placement:
         constraints:
-          - node.hostname == ${HOST}
+          - node.labels.role == aggregator
