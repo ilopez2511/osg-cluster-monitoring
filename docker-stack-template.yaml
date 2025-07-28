@@ -3,7 +3,9 @@ services:
     image: ashkanarabim/ldms-samp-custom:latest
     environment:
       - COMPID=1
-      - LDMSD_FLAGS=-x sock:10001 -c /root/samp.conf
+      # - LDMSD_FLAGS=-x sock:10001 -c /root/samp.conf
+      - LDMSD_FLAGS=-x sock:10001 -c /root/samp.conf -l /root/ldmsd.log -v DEBUG
+
     ports:
       - target: 10001
         published: 10001
@@ -16,7 +18,8 @@ services:
     entrypoint: bash /root/entrypoint.sh
 
   agg:
-    image: ashkanarabim/ldms-agg-custom:latest
+    # image: ashkanarabim/ldms-agg-custom:latest
+    image: ldms-agg-custom:ubuntu-v2
     environment:
       - LDMSD_FLAGS=-x sock:20001 -c /root/agg.conf
       - COMPID=2

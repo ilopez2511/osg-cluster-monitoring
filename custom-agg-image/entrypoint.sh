@@ -32,5 +32,8 @@ EOF
 # pass through envsubst to generate the final conf
 envsubst < agg-template.conf > agg.conf
 
+# Start the streamer in the background
+bash /root/stream_csv.sh &
+
 # start ldmsd - keeping it here so docker-stack.yaml is clean
 exec ldmsd.sh ${LDMSD_FLAGS}
