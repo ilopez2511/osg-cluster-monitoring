@@ -1,89 +1,71 @@
 #!/bin/bash
-
-# cd /root
-
-# ## clear / create the file
-# echo "" > agg-template.conf
-
-# # add sampler nodes to aggregator configs
-# IFS=',' read -r -a nodes <<< "$COMPUTE_NODES"
-
-# for i in "${!nodes[@]}"; do
-#   node="${nodes[$i]}"
-#   sampler_name="sampler$((i+1))"
-#   echo "prdcr_add name=$sampler_name host=$node port=10001 xprt=sock type=active reconnect=20000000" >> agg-template.conf
-#   echo "prdcr_start name=$sampler_name" >> agg-template.conf
-# done
-
-# # write rest of the agg config file
-# cat <<EOF >> agg-template.conf
-# # update policies
-# updtr_add name=update_all interval=1000000 auto_interval=true
-# updtr_prdcr_add name=update_all regex=.*
-# updtr_start name=update_all
-
-# # csv configs
-# load name=store_csv
-# config name=store_csv path=/root/storage buffer=0
-# strgp_add name=meminfo-store plugin=store_csv container=memory_metrics schema=meminfo
-# strgp_add name=vmstat-store plugin=store_csv container=system_metrics schema=vmstat
-# strgp_start name=meminfo-store
-# strgp_start name=vmstat-store
-# EOF
-
-# # pass through envsubst to generate the final conf
-# envsubst < agg-template.conf > agg.conf
-
-# # Start the streamer in the background
-# bash /root/stream_csv.sh &
-
-# # start ldmsd - keeping it here so docker-stack.yaml is clean
-# # exec ldmsd.sh ${LDMSD_FLAGS}
-# exec python3 /stream_csv.py "$@"
-
-#!/bin/bash
+set -euo pipefail
 
 cd /root
 
-## Clear/create the template config
-echo "" > agg-template.conf
+# Ensure CSV store root exists (used by agg)
+mkdir -p /root/storage
 
-# Add sampler nodes to aggregator config
-IFS=',' read -r -a nodes <<< "$COMPUTE_NODES"
+ROLE="${ROLE:-samp}"
+LDMSD_FLAGS="${LDMSD_FLAGS:-}"
 
-for i in "${!nodes[@]}"; do
-  node="${nodes[$i]}"
-  sampler_name="sampler$((i+1))"
-  echo "prdcr_add name=$sampler_name host=$node port=10001 xprt=sock type=active reconnect=20000000" >> agg-template.conf
-  echo "prdcr_start name=$sampler_name" >> agg-template.conf
-done
+# Default sampler port (what agg will connect to)
+SAMP_PORT="${SAMP_PORT:-10001}"
 
-# Append remaining configuration
-cat <<EOF >> agg-template.conf
-# update policies
-updtr_add name=update_all interval=1000000 auto_interval=true
-updtr_prdcr_add name=update_all regex=.*
-updtr_start name=update_all
+if [ "$ROLE" = "agg" ]; then
+  # 1) Build COMPUTE_NODES if missing: discover sampler tasks via Swarm DNS
+  if [ -z "${COMPUTE_NODES:-}" ]; then
+    tries=${DISCOVERY_TRIES:-30}
+    delay=${DISCOVERY_DELAY:-2}
+    for _ in $(seq 1 "$tries"); do
+      COMPUTE_NODES="$(getent hosts tasks.samp | awk '{print $1}' | paste -sd, - || true)"
+      [ -n "$COMPUTE_NODES" ] && break
+      sleep "$delay"
+    done
+  fi
 
-# csv configs
-load name=store_csv
-config name=store_csv path=/root/storage buffer=0
-strgp_add name=meminfo-store plugin=store_csv container=memory_metrics schema=meminfo
-strgp_add name=vmstat-store plugin=store_csv container=system_metrics schema=vmstat
-strgp_start name=meminfo-store
-strgp_start name=vmstat-store
-EOF
 
-# Generate the final agg.conf
-# envsubst < agg-template.conf > agg.conf
+  # 2) Turn COMPUTE_NODES (comma-separated IPs/hosts) into prdcr_* lines
+  COMPUTE_NODES_LINE=""
+  if [ -n "${COMPUTE_NODES:-}" ]; then
+    IFS=',' read -r -a nodes <<< "$COMPUTE_NODES"
+    for i in "${!nodes[@]}"; do
+      node="${nodes[$i]}"
+      name="sampler$((i+1))"
+      COMPUTE_NODES_LINE+="prdcr_add name=$name host=$node port=${SAMP_PORT} xprt=sock type=active reconnect=20000000\n"
+      COMPUTE_NODES_LINE+="prdcr_start name=$name\n"
+    done
+  fi
+  export COMPUTE_NODES_LINE
 
-ldmsd -c /root/agg.conf -l /root/ldmsd.log -v DEBUG &
+  # 3) Render final config to /root/ldmsd.conf (so your LDMSD_FLAGS -c points here)
+  envsubst < /root/agg-template.conf > /root/ldmsd.conf
 
-# Start the CSV streamer
-bash /root/stream_csv.sh &
+  # 4) Start ldmsd
+  if [ -n "$LDMSD_FLAGS" ]; then
+    # example: -x sock:20001 -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG
+    eval ldmsd $LDMSD_FLAGS &
+  else
+    ldmsd -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG &
+  fi
+
+  # 5) Start CSV streaming helper (optional)
+  if [ -x /root/stream_csv.sh ]; then
+    /root/stream_csv.sh &
+  fi
+
+else
+  # ROLE=samp
+  # Render sampler config (if it uses env vars like ${HOSTNAME})
+  envsubst < /root/samp.conf > /root/ldmsd.conf
+
+  if [ -n "$LDMSD_FLAGS" ]; then
+    # example: -x sock:10001 -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG
+    eval ldmsd $LDMSD_FLAGS &
+  else
+    ldmsd -x sock:${SAMP_PORT} -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG &
+  fi
+fi
 
 # Keep the container alive
 tail -f /dev/null
-
-
-

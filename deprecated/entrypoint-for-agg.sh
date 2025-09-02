@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# cd /root
+
+# ## clear / create the file
+# echo "" > agg-template.conf
+
+# # add sampler nodes to aggregator configs
+# IFS=',' read -r -a nodes <<< "$COMPUTE_NODES"
+
+# for i in "${!nodes[@]}"; do
+#   node="${nodes[$i]}"
+#   sampler_name="sampler$((i+1))"
+#   echo "prdcr_add name=$sampler_name host=$node port=10001 xprt=sock type=active reconnect=20000000" >> agg-template.conf
+#   echo "prdcr_start name=$sampler_name" >> agg-template.conf
+# done
+
+# # write rest of the agg config file
+# cat <<EOF >> agg-template.conf
+# # update policies
+# updtr_add name=update_all interval=1000000 auto_interval=true
+# updtr_prdcr_add name=update_all regex=.*
+# updtr_start name=update_all
+
+# # csv configs
+# load name=store_csv
+# config name=store_csv path=/root/storage buffer=0
+# strgp_add name=meminfo-store plugin=store_csv container=memory_metrics schema=meminfo
+# strgp_add name=vmstat-store plugin=store_csv container=system_metrics schema=vmstat
+# strgp_start name=meminfo-store
+# strgp_start name=vmstat-store
+# EOF
+
+# # pass through envsubst to generate the final conf
+# envsubst < agg-template.conf > agg.conf
+
+# # Start the streamer in the background
+# bash /root/stream_csv.sh &
+
+# # start ldmsd - keeping it here so docker-stack.yaml is clean
+# # exec ldmsd.sh ${LDMSD_FLAGS}
+# exec python3 /stream_csv.py "$@"
+
+#!/bin/bash
+
+cd /root
+
+## Clear/create the template config
+echo "" > agg-template.conf
+
+# Add sampler nodes to aggregator config
+IFS=',' read -r -a nodes <<< "$COMPUTE_NODES"
+
+for i in "${!nodes[@]}"; do
+  node="${nodes[$i]}"
+  sampler_name="sampler$((i+1))"
+  echo "prdcr_add name=$sampler_name host=$node port=10001 xprt=sock type=active reconnect=20000000" >> agg-template.conf
+  echo "prdcr_start name=$sampler_name" >> agg-template.conf
+done
+
+# Append remaining configuration
+cat <<EOF >> agg-template.conf
+# update policies
+updtr_add name=update_all interval=1000000 auto_interval=true
+updtr_prdcr_add name=update_all regex=.*
+updtr_start name=update_all
+
+# csv configs
+load name=store_csv
+config name=store_csv path=/root/storage buffer=0
+strgp_add name=meminfo-store plugin=store_csv container=memory_metrics schema=meminfo
+strgp_add name=vmstat-store plugin=store_csv container=system_metrics schema=vmstat
+strgp_start name=meminfo-store
+strgp_start name=vmstat-store
+EOF
+
+# Generate the final agg.conf
+# envsubst < agg-template.conf > agg.conf
+
+ldmsd -c /root/agg.conf -l /root/ldmsd.log -v DEBUG &
+
+# Start the CSV streamer
+bash /root/stream_csv.sh &
+
+# Keep the container alive
+tail -f /dev/null
+
+
+

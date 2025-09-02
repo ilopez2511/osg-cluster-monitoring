@@ -1,54 +1,67 @@
+version: "3.9"
+
+networks:
+  ldms:
+    driver: overlay
+    attachable: true
+
 services:
   samp:
-    image: ashkanarabim/ldms-samp-custom:latest
+    image: ashkanarabim/ldms-samp-custom:v1
+    entrypoint: ["/root/entrypoint.sh"]
     environment:
-      - COMPID=1
-      # - LDMSD_FLAGS=-x sock:10001 -c /root/samp.conf
-      - LDMSD_FLAGS=-x sock:10001 -c /root/samp.conf -l /root/ldmsd.log -v DEBUG
-
-    ports:
-      - target: 10001
-        published: 10001
-        mode: host
+      ROLE: "samp"
+      LDMSD_FLAGS: "-x sock:10001 -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG"
     deploy:
       mode: global
       placement:
         constraints:
-          - node.labels.worker == sampler
-    entrypoint: bash /root/entrypoint.sh
+          - node.labels.sampler_role == yes
+      endpoint_mode: dnsrr
+    networks:
+      - ldms
 
   agg:
-    # image: ashkanarabim/ldms-agg-custom:latest
     image: ldms-agg-custom:ubuntu-v2
     environment:
-      - LDMSD_FLAGS=-x sock:20001 -c /root/agg.conf
-      - COMPID=2
-      - COMPUTE_NODES=${COMPUTE_NODES}
-    depends_on:
-      - samp
-    ports:
-      - target: 20001
-        published: 20001
-        mode: host
+      ROLE: "agg"
+      LDMSD_FLAGS: "-x sock:20001 -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG"
+      RECEIVER_HOST: "receiver"
+      # Optional:
+      # COMPUTE_NODES: "10.0.1.3,10.0.1.4"
+      # SAMP_PORT: "10001"
+      # DISCOVERY_TRIES: "60"
+      # DISCOVERY_DELAY: "1"
     deploy:
       mode: global
       placement:
         constraints:
-          - node.labels.role == aggregator
-    entrypoint: bash /root/entrypoint.sh
+          - node.labels.aggregator == true
+    networks:
+      - ldms
+    # Publish only if you need host access to ldmsd:
+    # ports:
+    #   - target: 20001
+    #     published: 20001
+    #     mode: host
 
   receiver:
     image: python:3.9-slim
+    environment:
+      DATA_DIR: "/app/data"
     volumes:
       - ./receiver:/app
     working_dir: /app
     command: ["python", "csv_receiver.py"]
-    ports:
-      - target: 9999
-        published: 9999
-        mode: host 
     deploy:
       mode: global
       placement:
         constraints:
-          - node.labels.role == aggregator
+          - node.labels.aggregator == true
+    networks:
+      - ldms
+    # Publish only if you need to hit it from the host:
+    # ports:
+    #   - target: 9999
+    #     published: 9999
+    #     mode: host
