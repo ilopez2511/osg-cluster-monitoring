@@ -24,22 +24,27 @@ if [ "$ROLE" = "agg" ]; then
     done
   fi
 
-
   # 2) Turn COMPUTE_NODES (comma-separated IPs/hosts) into prdcr_* lines
   COMPUTE_NODES_LINE=""
+  reconnect_opt=""
+  [ -n "${RECONNECT:-}" ] && reconnect_opt=" reconnect=${RECONNECT}"
+
   if [ -n "${COMPUTE_NODES:-}" ]; then
     IFS=',' read -r -a nodes <<< "$COMPUTE_NODES"
     for i in "${!nodes[@]}"; do
       node="${nodes[$i]}"
       name="sampler$((i+1))"
-      COMPUTE_NODES_LINE+="prdcr_add name=$name host=$node port=${SAMP_PORT} xprt=sock type=active reconnect=20000000\n"
-      COMPUTE_NODES_LINE+="prdcr_start name=$name\n"
+      # Use printf to append REAL newlines
+      printf -v COMPUTE_NODES_LINE '%sprdcr_add name=%s host=%s port=%s xprt=sock type=active%s\nprdcr_start name=%s\n' \
+        "$COMPUTE_NODES_LINE" "$name" "$node" "$SAMP_PORT" "$reconnect_opt" "$name"
     done
   fi
   export COMPUTE_NODES_LINE
 
   # 3) Render final config to /root/ldmsd.conf (so your LDMSD_FLAGS -c points here)
   envsubst < /root/agg-template.conf > /root/ldmsd.conf
+  echo "----- rendered /root/ldmsd.conf (head) -----"
+  sed -n '1,80p' /root/ldmsd.conf
 
   # 4) Start ldmsd
   if [ -n "$LDMSD_FLAGS" ]; then
@@ -56,11 +61,8 @@ if [ "$ROLE" = "agg" ]; then
 
 else
   # ROLE=samp
-  # Render sampler config (if it uses env vars like ${HOSTNAME})
   envsubst < /root/samp.conf > /root/ldmsd.conf
-
   if [ -n "$LDMSD_FLAGS" ]; then
-    # example: -x sock:10001 -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG
     eval ldmsd $LDMSD_FLAGS &
   else
     ldmsd -x sock:${SAMP_PORT} -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG &

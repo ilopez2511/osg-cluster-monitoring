@@ -22,7 +22,7 @@ services:
       - ldms
 
   agg:
-    image: ldms-agg-custom:ubuntu-v2
+    image: ldms-agg-custom:ubuntu-v4
     environment:
       ROLE: "agg"
       LDMSD_FLAGS: "-x sock:20001 -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG"
@@ -32,6 +32,7 @@ services:
       # SAMP_PORT: "10001"
       # DISCOVERY_TRIES: "60"
       # DISCOVERY_DELAY: "1"
+      RECONNECT: "5"
     deploy:
       mode: global
       placement:
