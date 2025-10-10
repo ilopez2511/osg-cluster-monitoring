@@ -7,7 +7,7 @@ networks:
 
 services:
   samp:
-    image: ashkanarabim/ldms-samp-custom:v1
+    image: ilopez2511/ldms-samp-custom:v1
     entrypoint: ["/root/entrypoint.sh"]
     environment:
       ROLE: "samp"
@@ -22,7 +22,7 @@ services:
       - ldms
 
   agg:
-    image: ldms-agg-custom:ubuntu-v4
+    image: ilopez2511/ldms-agg-custom:ubuntu-v4
     environment:
       ROLE: "agg"
       LDMSD_FLAGS: "-x sock:20001 -c /root/ldmsd.conf -l /root/ldmsd.log -v DEBUG"

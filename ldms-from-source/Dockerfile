@@ -91,7 +91,7 @@ RUN git clone --recurse-submodules https://github.com/ovis-hpc/ovis.git && \
 
 ENV LD_LIBRARY_PATH=/usr/lib:/usr/lib64:/usr/local/lib
 
-COPY entrypoint.sh stream_csv.sh agg-template.conf /root/
+COPY entrypoint.sh stream_csv.sh agg-template.conf samp.conf /root/
 RUN chmod +x /root/entrypoint.sh /root/stream_csv.sh && \
     mkdir -p /root/storage
 
