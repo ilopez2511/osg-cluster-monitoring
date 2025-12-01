@@ -20,6 +20,21 @@ services:
       endpoint_mode: dnsrr
     networks:
       - ldms
+  dcgm:
+    image: ilopez2511/dcgm-csv:latest
+    entrypoint: ["/root/dcgm_csv_collector.sh"]
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.sampler_role == yes   # run sidecar next to sampler
+      restart_policy:
+        condition: none                      # run once and exit after collecting
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+    networks:
+      - ldms
 
   agg:
     image: ilopez2511/ldms-agg-custom:ubuntu-v4
